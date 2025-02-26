@@ -1,0 +1,6 @@
+telebot
+numpy
+torch
+datasets
+transformers
+PyPDF2
