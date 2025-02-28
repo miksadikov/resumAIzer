@@ -1,4 +1,6 @@
 import os
+import gdown
+import zipfile
 import telebot
 import torch
 import numpy as np
@@ -13,6 +15,9 @@ oauth_token = os.environ.get("OAUTH_TOKEN")
 catalog_id = os.environ.get("CATALOG_ID")
 tg_token = os.environ.get("BOT_TOKEN")
 
+MODEL_DIR = "/model"
+MODEL_WORK_DIR = "/model/ModernBERT"
+MODEL_ZIP = os.path.join(MODEL_DIR, "model_weights.zip")
 
 def pdf_to_text(pdf_path):
     # Open the PDF file in read-binary mode
@@ -92,13 +97,31 @@ def generate_resume_recommendation(probabilities):
 
     return "\n".join(recommendations_output)
 
+def download_and_extract_model():
+    """Скачивает и распаковывает веса модели, если их нет в Volume"""
+    if not os.path.exists(MODEL_WORK_DIR):
+        # Скачиваем архив с Google Диска
+        url = 'https://drive.google.com/uc?export=download&confirm=no_antivirus&id=1FQ9-NzozILQroq2cDZzSV82pBTXrHUxL'
+        gdown.download(url, MODEL_ZIP, quiet=False)
+        
+        # Распаковываем архив
+        with zipfile.ZipFile(MODEL_ZIP, 'r') as zip_ref:
+            zip_ref.extractall(MODEL_DIR)
+        
+        # Удаляем архив после распаковки (опционально)
+        os.remove(MODEL_ZIP)
+        print(f"Модель скачана и распакована в {MODEL_WORK_DIR}")
+    else:
+        print(f"Модель уже существует в {MODEL_DIR}")
+
 
 bot = telebot.TeleBot(tg_token)
 
+# Скачиваем и распаковываем веса при запуске
+download_and_extract_model()
 # Загружаем модель и токенизатор из сохраненных файлов
-model_dir = "model"
-tokenizer = AutoTokenizer.from_pretrained(model_dir)
-model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_WORK_DIR)
+model = AutoModelForSequenceClassification.from_pretrained(MODEL_WORK_DIR)
 
 # Переводим модель в evaluation mode
 model.eval()
@@ -113,10 +136,10 @@ def document(message):
     file_name = message.document.file_name
     file_info = bot.get_file(message.document.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
-    with open('/tmp/resume.pdf', 'wb') as new_file:
+    with open('/model/resume.pdf', 'wb') as new_file:
         new_file.write(downloaded_file)
     # Сохраняем резюме в файл
-    resume_ru = pdf_to_text('/tmp/resume.pdf').replace('\n',' ')
+    resume_ru = pdf_to_text('/model/resume.pdf').replace('\n',' ')
 
     # Выполняем перевод резюме на английский
     IAM_TOKEN = oauth_token
